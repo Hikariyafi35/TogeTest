@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a8014dcb1134ba4b9a5a0662aaf1c53, type: 3}
+  m_Name: Lady Necyra
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitName: Lady Necyra
+  unitSprite: {fileID: 1457491203435894738, guid: 84f1fa8511416a94585c6d34e64f73c9, type: 3}
+  isPlayerTeam: 1
+  animatorController: {fileID: 9100000, guid: 2f16357902b332b4eae7280a76812738, type: 2}
+  maxHP: 100
+  maxMP: 150
+  baseDamage: 10
+  basicAttackType: 1
+  basicProjectilePrefab: {fileID: 2373842757692779013, guid: c2d17ab480e46104ca645748547fd568, type: 3}
+  basicImpactPrefab: {fileID: 7714156303890914850, guid: f64c16cd75409b944a5756884850ccf5, type: 3}
+  skills:
+  - skillName: Dark Gaia Force
+    skillType: 1
+    damage: 80
+    mpCost: 70
+    animTriggerName: Cast
+    skillEffectPrefab: {fileID: 6068980093009443249, guid: 69ff06b3f3e54684fac339787b9a8fb3, type: 3}
+    skillImpactPrefab: {fileID: 2691187959988234501, guid: 119631c49919fe04b98ad1d24e3f7da4, type: 3}
+    effectDuration: 0
+  - skillName: Voidness
+    skillType: 2
+    damage: 20
+    mpCost: 80
+    animTriggerName: Cast
+    skillEffectPrefab: {fileID: 4365331764938575874, guid: 0047dd43bf93bd6439a3f3ad932af34e, type: 3}
+    skillImpactPrefab: {fileID: 0}
+    effectDuration: 3

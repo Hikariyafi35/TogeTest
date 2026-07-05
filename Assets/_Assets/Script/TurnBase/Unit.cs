@@ -193,14 +193,38 @@ public class Unit : MonoBehaviour
         if (damageTextPrefab != null)
         {
             // Munculkan teks sedikit lebih tinggi agar tidak menumpuk dengan teks HP
-            Vector3 spawnPosition = transform.position + new Vector3(0, 1.5f, 0); 
+            Vector3 spawnPosition = transform.position + new Vector3(0, 1.5f, 0);
             GameObject floatingText = Instantiate(damageTextPrefab, spawnPosition, Quaternion.identity);
-            
+
             floatingText.GetComponent<DamageText>().Setup("+" + amount + " MP");
 
             // Opsional: Ubah warna teks menjadi Biru (Cyan) khusus untuk MP
             TextMeshPro textMesh = floatingText.GetComponent<TextMeshPro>();
             if (textMesh != null) textMesh.color = Color.cyan;
         }
+    }
+    [Header("Status Efek (Debuff)")]
+    // --- BARU: Variabel untuk mengingat efek terbakar ---
+    public int burnTurnsLeft = 0;
+    public int burnDamagePerTurn = 0;
+
+    // Fungsi untuk menerima status terbakar dari Wizard
+    public void ApplyBurn(int damage, int duration)
+    {
+        burnTurnsLeft = duration;
+        burnDamagePerTurn = damage;
+        Debug.Log(unitName + " terbakar! Menerima " + damage + " DMG selama " + duration + " turn.");
+    }
+
+    // Fungsi ini dipanggil Wasit di akhir giliran musuh
+    public bool TakeBurnDamage()
+    {
+        if (burnTurnsLeft > 0)
+        {
+            burnTurnsLeft--; // Kurangi sisa turn
+            Debug.Log("Efek Burn melukai " + unitName + "!");
+            return TakeDamage(burnDamagePerTurn); // Gunakan fungsi TakeDamage yang sudah ada
+        }
+        return false;
     }
 }

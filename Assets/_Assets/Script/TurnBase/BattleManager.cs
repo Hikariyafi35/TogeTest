@@ -207,27 +207,47 @@ public class BattleManager : MonoBehaviour
     private IEnumerator PlayerAttack()
     {
         Debug.Log(playerUnit.unitName + " melakukan Basic Attack!");
+        bool isEnemyDead = false;
 
         // --- 1. FASE MAJU (HANYA JIKA MELEE) ---
         if (playerData.basicAttackType == SkillType.MELEE)
         {
+            // --- LOGIKA MELEE LAMA ---
             Vector3 attackPosition = enemyUnit.transform.position + new Vector3(-1.5f, 0, 0);
             yield return StartCoroutine(MoveUnit(playerUnit.transform, attackPosition));
-        }
 
-        // --- 2. FASE MUKUL ---
-        playerUnit.PlayAttackAnimation();
-        yield return new WaitForSeconds(0.5f);
-
-        bool isEnemyDead = enemyUnit.TakeDamage(playerUnit.baseDamage);
-        yield return new WaitForSeconds(0.5f);
-
-        // --- 3. FASE MUNDUR (HANYA JIKA MELEE) ---
-        if (playerData.basicAttackType == SkillType.MELEE)
-        {
-            yield return StartCoroutine(MoveUnit(playerUnit.transform, playerSpawnPoint.position));
+            playerUnit.PlayAttackAnimation();
             yield return new WaitForSeconds(0.5f);
+
+            isEnemyDead = enemyUnit.TakeDamage(playerUnit.baseDamage);
+            yield return new WaitForSeconds(0.5f);
+
+            yield return StartCoroutine(MoveUnit(playerUnit.transform, playerSpawnPoint.position));
         }
+        else if (playerData.basicAttackType == SkillType.RANGED)
+        {
+            playerUnit.PlayAttackAnimation(); 
+            yield return new WaitForSeconds(0.3f); 
+
+            if (playerData.basicProjectilePrefab != null)
+            {
+                // Munculkan peluru bola api
+                GameObject proj = Instantiate(playerData.basicProjectilePrefab, playerUnit.transform.position, Quaternion.identity);
+                // Tunggu sampai peluru menabrak target
+                yield return StartCoroutine(MoveProjectile(proj, enemyUnit.transform.position));
+
+                // --- BARU: Munculkan efek ledakan setelah peluru menabrak ---
+                if (playerData.basicImpactPrefab != null)
+                {
+                    GameObject impact = Instantiate(playerData.basicImpactPrefab, enemyUnit.transform.position, Quaternion.identity);
+                    // Hancurkan efek ledakan otomatis setelah 0.5 detik (sesuaikan dengan durasi animasimu)
+                    Destroy(impact, 0.5f); 
+                }
+            }
+
+            isEnemyDead = enemyUnit.TakeDamage(playerUnit.baseDamage);
+        }
+        yield return new WaitForSeconds(0.5f);
 
         // --- 4. CEK HASIL ---
         if (isEnemyDead)
@@ -267,31 +287,64 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    private IEnumerator PlayerUseSkill(SkillAction skill)
+private IEnumerator PlayerUseSkill(SkillAction skill)
     {
         Debug.Log(playerUnit.unitName + " menggunakan " + skill.skillName + "!");
         playerUnit.ConsumeMP(skill.mpCost);
+        bool isEnemyDead = false;
 
-        // --- FASE MAJU (HANYA JIKA MELEE) ---
         if (skill.skillType == SkillType.MELEE)
         {
+            // --- LOGIKA MELEE ---
             Vector3 attackPosition = enemyUnit.transform.position + new Vector3(-1.5f, 0, 0);
             yield return StartCoroutine(MoveUnit(playerUnit.transform, attackPosition));
-        }
-
-        // --- FASE EKSEKUSI ANIMASI ---
-        playerUnit.PlayCustomAnimation(skill.animTriggerName);
-        yield return new WaitForSeconds(0.5f); // Sesuaikan dengan durasi animasimu
-
-        bool isEnemyDead = enemyUnit.TakeDamage(skill.damage);
-        yield return new WaitForSeconds(0.5f);
-
-        // --- FASE MUNDUR (HANYA JIKA MELEE) ---
-        if (skill.skillType == SkillType.MELEE)
-        {
-            yield return StartCoroutine(MoveUnit(playerUnit.transform, playerSpawnPoint.position));
+            
+            playerUnit.PlayCustomAnimation(skill.animTriggerName);
             yield return new WaitForSeconds(0.5f);
+            
+            isEnemyDead = enemyUnit.TakeDamage(skill.damage);
+            yield return new WaitForSeconds(0.5f);
+            
+            yield return StartCoroutine(MoveUnit(playerUnit.transform, playerSpawnPoint.position));
         }
+        else if (skill.skillType == SkillType.RANGED)
+        {
+            playerUnit.PlayCustomAnimation(skill.animTriggerName);
+            yield return new WaitForSeconds(0.3f);
+            
+            if (skill.skillEffectPrefab != null)
+            {
+                GameObject proj = Instantiate(skill.skillEffectPrefab, playerUnit.transform.position, Quaternion.identity);
+                yield return StartCoroutine(MoveProjectile(proj, enemyUnit.transform.position));
+
+                // --- BARU: Munculkan efek ledakan Super Fireball ---
+                if (skill.skillImpactPrefab != null)
+                {
+                    GameObject impact = Instantiate(skill.skillImpactPrefab, enemyUnit.transform.position, Quaternion.identity);
+                    Destroy(impact, 0.5f); 
+                }
+            }
+            
+            isEnemyDead = enemyUnit.TakeDamage(skill.damage);
+        }
+        else if (skill.skillType == SkillType.DOT_DEBUFF)
+        {
+            // --- LOGIKA SUMMON FIRE (BAKAR) ---
+            playerUnit.PlayCustomAnimation(skill.animTriggerName);
+            yield return new WaitForSeconds(0.5f); // Wizard cast spell
+            
+            if (skill.skillEffectPrefab != null)
+            {
+                // Munculkan api LANGSUNG di tubuh musuh (tidak melesat)
+                GameObject fireEffect = Instantiate(skill.skillEffectPrefab, enemyUnit.transform.position, Quaternion.identity);
+                Destroy(fireEffect, 1.5f); // Hancurkan visual api setelah 1.5 detik
+            }
+            
+            // Terapkan efek bakaran tanpa memberikan instant damage
+            enemyUnit.ApplyBurn(skill.damage, skill.effectDuration);
+        }
+
+        yield return new WaitForSeconds(0.5f);
 
         // --- CEK HASIL ---
         if (isEnemyDead)
@@ -494,6 +547,20 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
+            // --- BARU: Cek jika musuh sedang terbakar sebelum melempar giliran ke pemain ---
+            if (enemyUnit.burnTurnsLeft > 0)
+            {
+                bool deadByBurn = enemyUnit.TakeBurnDamage(); // Kena damage bakaran 10
+                yield return new WaitForSeconds(1f); // Beri waktu pemain melihat musuh kepanasan
+                
+                if (deadByBurn) 
+                {
+                    state = BattleState.WON;
+                    EndBattle();
+                    yield break; // Hentikan fungsi jika musuh mati karena api
+                }
+            }
+
             state = BattleState.PLAYERTURN;
             PlayerTurn();
         }
@@ -527,5 +594,19 @@ public class BattleManager : MonoBehaviour
         // Pastikan posisi akhirnya pas
         unitTransform.position = targetPos;
     }
-    
+    // --- FUNGSI BARU: Menggerakkan peluru bola api ---
+    private IEnumerator MoveProjectile(GameObject projectile, Vector3 targetPos)
+    {
+        float speed = 25f; // Kecepatan peluru melesat
+        
+        // Selama peluru belum sampai, terus geser
+        while (projectile != null && Vector3.Distance(projectile.transform.position, targetPos) > 0.1f)
+        {
+            projectile.transform.position = Vector3.MoveTowards(projectile.transform.position, targetPos, speed * Time.deltaTime);
+            yield return null;
+        }
+        
+        // Hancurkan peluru saat mengenai target
+        if (projectile != null) Destroy(projectile); 
+    }
 }

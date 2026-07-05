@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public enum SkillType { MELEE, RANGED }
+public enum SkillType { MELEE, RANGED, DOT_DEBUFF }
 
 // System.Serializable wajib ditambahkan agar class ini bisa muncul di Inspector Unity
 [System.Serializable]
@@ -12,6 +12,11 @@ public class SkillAction
     public int damage;
     public int mpCost;
     public string animTriggerName; // Nama trigger di Animator (misal: "Skill1", "Magic")
+
+    // --- BARU: Kebutuhan Skill Wizard ---
+    public GameObject skillEffectPrefab; // Untuk peluru bola api atau efek ledakan
+    public GameObject skillImpactPrefab;
+    public int effectDuration; // Berapa turn efek ini bertahan (untuk DoT)
 }
 
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "TurnBasedRPG/Unit Data")]
@@ -27,9 +32,9 @@ public class UnitData : ScriptableObject
     public int maxHP;
     public int maxMP;
     public int baseDamage;
-    [Header("Status Pertarungan")]
-    // --- BARU: Pengaturan tipe pergerakan untuk Basic Attack ---
     public SkillType basicAttackType;
+    public GameObject basicProjectilePrefab; // --- BARU: Peluru untuk Basic Attack ---
+    public GameObject basicImpactPrefab;
 
     [Header("Daftar Skill")]
     // Ini akan memunculkan array di Inspector di mana kamu bisa menambah 2, 3, atau 10 skill sekaligus

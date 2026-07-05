@@ -1942,7 +1942,7 @@ MonoBehaviour:
   battleUnitPrefab: {fileID: 2792192319214921073, guid: 8a5e86b50196b5844aca308d6a6c45d9, type: 3}
   playerSpawnPoint: {fileID: 1752476779}
   enemySpawnPoint: {fileID: 133606584}
-  playerData: {fileID: 11400000, guid: d05d3516e92f9d34baca553094d3c7eb, type: 2}
+  playerData: {fileID: 11400000, guid: 6486bcc882df96544a3d4e61147e63cd, type: 2}
   enemyData: {fileID: 11400000, guid: 1bf515265c791ab419a6e1928a1f27df, type: 2}
   actionPanel: {fileID: 1788306925}
   skillListPanel: {fileID: 204924350}
