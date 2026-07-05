@@ -16,6 +16,8 @@ public class movement : MonoBehaviour
     // Referensi komponen fisik (Parent)
     private Rigidbody2D rb;
 
+    [Header("Status")]
+    public bool canMove = true; // Saklar pergerakan
     private void Awake()
     {
         controls = new InputSystem_Actions();
@@ -37,17 +39,27 @@ public class movement : MonoBehaviour
         controls.Disable();
     }
 
-    private void Update()
+private void Update()
     {
+        // BARIS BARU: Jika tidak boleh bergerak, hentikan semua logika visual & input di bawahnya
+        if (!canMove) return; 
+
         // Untuk mencegah error jika referensi visual belum dimasukkan di Inspector
         if (spriteRenderer != null && animator != null)
         {
             HandleAnimationAndFlip();
         }
     }
-
     private void FixedUpdate()
     {
+        // Jika canMove false, hentikan pergerakan seketika dan jangan baca input
+        if (!canMove)
+        {
+            rb.linearVelocity = Vector2.zero;
+            animator.SetBool("isWalking", false); // Matikan animasi jalan
+            return;
+        }
+
         rb.linearVelocity = moveInput * moveSpeed;
     }
 
@@ -58,11 +70,16 @@ public class movement : MonoBehaviour
 
         if (moveInput.x > 0)
         {
-            spriteRenderer.flipX = false; 
+            spriteRenderer.flipX = false;
         }
         else if (moveInput.x < 0)
         {
-            spriteRenderer.flipX = true; 
+            spriteRenderer.flipX = true;
         }
+    }
+    // Fungsi publik ini akan dipanggil oleh script Cutscene atau Fungus
+    public void SetMovementEnabled(bool isEnabled)
+    {
+        canMove = isEnabled;
     }
 }
