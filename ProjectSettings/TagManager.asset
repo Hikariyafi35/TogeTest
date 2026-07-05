@@ -50,6 +50,9 @@ TagManager:
   - name: Player
     uniqueID: 273458541
     locked: 0
+  - name: Projectile
+    uniqueID: 207692039
+    locked: 0
   - name: Shield
     uniqueID: 2517318299
     locked: 0

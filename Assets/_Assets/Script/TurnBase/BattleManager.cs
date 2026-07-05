@@ -1,21 +1,21 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using System.Collections.Generic;
+using UnityEngine.InputSystem;
 
-public enum BattleState { START, PLAYERTURN, ENEMYTURN, WON, LOST }
+public enum BattleState { START, PLAYERTURN, WAITING_FOR_TARGET, BUSY, ENEMYTURN, WON, LOST }
+public enum ActionType { NONE, ATTACK, SKILL, ITEM }
 
-// --- BARU: Slot penyimpan item yang menggabungkan Data SO dan Jumlah Stok ---
 [System.Serializable]
 public class BattleItemSlot
 {
-    public ItemData itemSO;      // Referensi ke file SO (Katalog Item)
-    public int initialStock;     // Jumlah yang dibawa ke pertarungan ini
-    
-    [HideInInspector]
-    public int currentStock;     // Sisa stok saat ini
+    public ItemData itemSO;      
+    public int initialStock;     
+    [HideInInspector] public int currentStock;     
 }
+
 public class BattleManager : MonoBehaviour
 {
     [Header("Status Pertarungan")]
@@ -24,364 +24,269 @@ public class BattleManager : MonoBehaviour
     [Header("Referensi Cetakan (Prefab)")]
     public GameObject battleUnitPrefab;
 
-    [Header("Titik Berdiri (Spawn Points)")]
-    public Transform playerSpawnPoint;
-    public Transform enemySpawnPoint;
+    [Header("Pengaturan Party Pemain")]
+    public List<Transform> playerStations;
+    public List<UnitData> playerTeamData;
+    public List<Unit> activePlayerUnits = new List<Unit>(); 
 
-    [Header("Data Pertarungan Saat Ini")]
-    public UnitData playerData;
-    public UnitData enemyData;
+    [Header("Pengaturan Party Musuh")]
+    public List<Transform> enemyStations;
+    public List<UnitData> enemyTeamData;
+    public List<Unit> activeEnemyUnits = new List<Unit>();
 
     [Header("UI Pertarungan")]
-    public GameObject actionPanel; // Wadah tombol-tombol aksi
-
-    private Unit playerUnit;
-    private Unit enemyUnit;
-    // --- BARU: Penanda jatah pakai item ---
-    private bool hasUsedItemThisTurn = false;
-
-    [Header("UI Skill Dinamis")]
-    public GameObject skillListPanel;      // Masukkan SkillListPanel (kotak oranye)
-    public Transform skillListContainer;   // Masukkan SkillListPanel juga (sebagai induk tombol)
-    public GameObject skillItemPrefab;     // Masukkan SkillButton_Prefab dari folder Prefabs
+    public GameObject actionPanel; 
+    public GameObject skillListPanel;      
+    public Transform skillListContainer;   
+    public GameObject skillItemPrefab;     
+    public GameObject itemListPanel;      
+    public Transform itemListContainer;   
+    public GameObject itemButtonPrefab;
 
     [Header("Inventory Sementara")]
-    // --- UBAH: Sekarang menggunakan List dari BattleItemSlot ---
     public List<BattleItemSlot> battleItems = new List<BattleItemSlot>();
 
-    [Header("UI Item Dinamis")]
-    public GameObject itemListPanel;      // Panel untuk list Item
-    public Transform itemListContainer;   // Wadah tombol Item
-    public GameObject itemButtonPrefab; 
-    // Kita pakai prefab tombol skill yang sama saja karena bentuknya sama (Teks)
-    
+    // --- MEKANIK ANTREAN & TARGETING ---
+    private int currentPlayerIndex = 0; 
+    private Unit currentActingUnit;     
+    private ActionType pendingAction;   
+    private int pendingSkillIndex; // Menyimpan memori skill mana yang baru ditekan
+    private int pendingItemIndex;  // Menyimpan memori item mana yang baru ditekan
+    private bool hasUsedItemThisTurn = false;
+    // --- BARU: Variabel Navigasi WASD ---
+    private List<Unit> validTargets = new List<Unit>();
+    private int currentTargetIndex = 0;
 
     private void Start()
     {
+        activePlayerUnits.Clear();
+        activeEnemyUnits.Clear();
         state = BattleState.START;
-
-        // Sembunyikan UI saat awal pertarungan
         actionPanel.SetActive(false);
-        // --- BARU: Reset stok item setiap awal battle ---
+        CloseAllSubPanels();
+
         foreach (BattleItemSlot slot in battleItems)
         {
             slot.currentStock = slot.initialStock;
         }
-        StartCoroutine(SetupBattle());
+        StartCoroutine(SetupBattleTeam());
+    }
+    private void Update()
+    {
+        if (state == BattleState.WAITING_FOR_TARGET && validTargets.Count > 0)
+        {
+            HandleTargetSelection();
+        }
     }
 
-    private IEnumerator SetupBattle()
+    private void HandleTargetSelection()
     {
-        // --- SPAWN PLAYER ---
-        GameObject playerGO = Instantiate(battleUnitPrefab, playerSpawnPoint);
-        playerUnit = playerGO.GetComponent<Unit>();
-        playerUnit.SetupUnit(playerData);
+        if (Keyboard.current == null) return;
 
-        // --- SPAWN ENEMY ---
-        GameObject enemyGO = Instantiate(battleUnitPrefab, enemySpawnPoint);
-        enemyUnit = enemyGO.GetComponent<Unit>();
-        enemyUnit.SetupUnit(enemyData);
+        // W atau A untuk ke atas/kiri
+        if (Keyboard.current.wKey.wasPressedThisFrame || Keyboard.current.aKey.wasPressedThisFrame)
+        {
+            ChangeTarget(1); // --- UBAH: Sekarang pakai 1 ---
+        }
+        // S atau D untuk ke bawah/kanan
+        else if (Keyboard.current.sKey.wasPressedThisFrame || Keyboard.current.dKey.wasPressedThisFrame)
+        {
+            ChangeTarget(-1); // --- UBAH: Sekarang pakai -1 ---
+        }
+        else if (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.enterKey.wasPressedThisFrame)
+        {
+            ConfirmTarget();
+        }
+    }
+
+    private void ChangeTarget(int direction)
+    {
+        // 1. Matikan bayangan target saat ini
+        validTargets[currentTargetIndex].SetTargetIndicator(false);
+
+        // 2. Geser indeks (ke atas atau ke bawah)
+        currentTargetIndex += direction;
+
+        // 3. Logika Wrap-Around (Mentok bawah tembus ke atas, mentok atas tembus ke bawah)
+        if (currentTargetIndex < 0) currentTargetIndex = validTargets.Count - 1;
+        if (currentTargetIndex >= validTargets.Count) currentTargetIndex = 0;
+
+        // 4. Nyalakan bayangan target yang baru
+        validTargets[currentTargetIndex].SetTargetIndicator(true);
+    }
+
+    private IEnumerator SetupBattleTeam()
+    {
+        // SPAWN TIM PEMAIN
+        for (int i = 0; i < playerTeamData.Count; i++)
+        {
+            if (i < playerStations.Count) 
+            {
+                GameObject pGo = Instantiate(battleUnitPrefab, playerStations[i]);
+                Unit pUnit = pGo.GetComponent<Unit>();
+                pUnit.SetupUnit(playerTeamData[i]);
+                activePlayerUnits.Add(pUnit);
+            }
+        }
+
+        // SPAWN TIM MUSUH
+        for (int i = 0; i < enemyTeamData.Count; i++)
+        {
+            if (i < enemyStations.Count)
+            {
+                GameObject eGo = Instantiate(battleUnitPrefab, enemyStations[i]);
+                Unit eUnit = eGo.GetComponent<Unit>();
+                eUnit.SetupUnit(enemyTeamData[i]);
+                activeEnemyUnits.Add(eUnit);
+            }
+        }
 
         yield return new WaitForSeconds(1.5f);
-
-        state = BattleState.PLAYERTURN;
-        PlayerTurn();
+        
+        currentPlayerIndex = 0;
+        StartPlayerTurn();
     }
+
     private void CloseAllSubPanels()
     {
         if (skillListPanel != null) skillListPanel.SetActive(false);
         if (itemListPanel != null) itemListPanel.SetActive(false);
     }
-    private void PlayerTurn()
-    {
-        Debug.Log("Giliran Pemain!");
 
-        // --- BARU: Lepas status bertahan saat giliran baru dimulai ---
-        playerUnit.SetDefending(false);
-        // --- BARU: Reset jatah item setiap giliran baru ---
+    // --- MENGELOLA GILIRAN PEMAIN INDIVIDU ---
+    private void StartPlayerTurn()
+    {
+        if (activePlayerUnits.Count == 0) return;
+
+        currentActingUnit = activePlayerUnits[currentPlayerIndex];
+
+        // Cek jika pemain ini mati karena efek bakar sebelum gilirannya mulai
+        if (currentActingUnit.burnTurnsLeft > 0)
+        {
+            bool deadByBurn = currentActingUnit.TakeBurnDamage();
+            if (deadByBurn)
+            {
+                activePlayerUnits.Remove(currentActingUnit);
+                currentActingUnit.Die();
+                NextTurnProcessor(); // Lanjut ke antrean berikutnya
+                return;
+            }
+        }
+
+        Debug.Log("Giliran: " + currentActingUnit.unitName);
+        currentActingUnit.SetDefending(false);
+        currentActingUnit.SetTurnIndicator(true);
         hasUsedItemThisTurn = false;
+        pendingAction = ActionType.NONE;
+
+        state = BattleState.PLAYERTURN;
         CloseAllSubPanels();
         actionPanel.SetActive(true);
     }
+    
+    // --- FUNGSI BARU: Menyiapkan Mode Targeting ---
+    private void StartTargetingMode(ActionType action)
+    {
+        pendingAction = action;
+        state = BattleState.WAITING_FOR_TARGET;
+        
+        CloseAllSubPanels();
+        actionPanel.SetActive(false);
+
+        // Kumpulkan target yang valid (Kawan atau Lawan)
+        validTargets.Clear();
+        if (action == ActionType.ATTACK || action == ActionType.SKILL)
+        {
+            validTargets.AddRange(activeEnemyUnits);
+            Debug.Log("Pilih Musuh! (WASD untuk geser, Spasi/Enter untuk konfirmasi)");
+        }
+        else if (action == ActionType.ITEM)
+        {
+            validTargets.AddRange(activePlayerUnits);
+            Debug.Log("Pilih Kawan! (WASD untuk geser, Spasi/Enter untuk konfirmasi)");
+        }
+
+        // Set kursor ke target pertama
+        currentTargetIndex = 0;
+        validTargets[currentTargetIndex].SetTargetIndicator(true);
+    }
+
+    // ==========================================
+    // BAGIAN 1: TOMBOL-TOMBOL UI (KLIK PERTAMA)
+    // ==========================================
+
+    public void OnAttackButton()
+    {
+        if (state != BattleState.PLAYERTURN) return;
+        StartTargetingMode(ActionType.ATTACK);
+    }
+
     public void OnDefendButton()
     {
         if (state != BattleState.PLAYERTURN) return;
 
-        // Sembunyikan UI
         actionPanel.SetActive(false);
-        skillListPanel.SetActive(false);
-
+        CloseAllSubPanels();
         StartCoroutine(PlayerDefend());
-    }
-    private IEnumerator PlayerDefend()
-    {
-        Debug.Log(playerUnit.unitName + " mengambil posisi bertahan!");
-
-        // 1. Aktifkan status bertahan & munculkan ikon sprite tameng
-        playerUnit.SetDefending(true);
-
-        // 2. Beri jeda singkat agar pemain melihat ikon muncul sebelum giliran pindah
-        yield return new WaitForSeconds(0.5f); // Jeda dikurangi dari 1 detik menjadi 0.5 detik
-
-        // 3. Langsung lemparkan giliran ke musuh
-        state = BattleState.ENEMYTURN;
-        StartCoroutine(EnemyTurn());
     }
 
     public void ToggleSkillPanel()
     {
         if (state != BattleState.PLAYERTURN) return;
 
-        // Balikkan status aktif panel (kalau mati jadi nyala, kalau nyala jadi mati)
         bool isActive = skillListPanel.activeSelf;
         CloseAllSubPanels();
         skillListPanel.SetActive(!isActive);
-
-        // Jika panel baru saja dibuka, isi dengan daftar skill
-        if (!isActive)
-        {
-            PopulateSkillList();
-        }
+        if (!isActive) PopulateSkillList();
     }
-    // --- 2. FUNGSI MEMBUAT TOMBOL DINAMIS ---
+
     private void PopulateSkillList()
     {
-        // Bersihkan tombol-tombol lama (jika ada) agar tidak menumpuk
-        foreach (Transform child in skillListContainer)
-        {
-            Destroy(child.gameObject);
-        }
+        foreach (Transform child in skillListContainer) Destroy(child.gameObject);
 
-        // Loop sebanyak jumlah skill yang dimiliki karakter
-        for (int i = 0; i < playerData.skills.Count; i++)
+        // Hanya tampilkan skill milik karakter yang sedang jalan!
+        for (int i = 0; i < currentActingUnit.maxMP; i++) // Trick agar rapi
         {
-            int index = i; // Penting disalin ke variabel lokal untuk Button Listener
-            SkillAction skill = playerData.skills[i];
+            if (i >= playerTeamData[currentPlayerIndex].skills.Count) break;
 
-            // Munculkan cetakan tombol
+            int index = i; 
+            SkillAction skill = playerTeamData[currentPlayerIndex].skills[i];
+
             GameObject newBtnObj = Instantiate(skillItemPrefab, skillListContainer);
-
-            // Ubah teksnya menjadi: "Nama Skill (MP: X)"
             TextMeshProUGUI btnText = newBtnObj.GetComponentInChildren<TextMeshProUGUI>();
             btnText.text = skill.skillName + " (MP: " + skill.mpCost + ")";
 
-            // Pasang fungsi klik ke tombol tersebut secara otomatis lewat kode
             Button btn = newBtnObj.GetComponent<Button>();
-            btn.onClick.AddListener(() => ExecuteSkill(index));
+            btn.onClick.AddListener(() => ExecuteSkillButton(index));
         }
     }
 
-    // --- 3. FUNGSI EKSEKUSI SKILL (Dipanggil oleh tombol di dalam panel oranye) ---
-    public void ExecuteSkill(int skillIndex)
+    public void ExecuteSkillButton(int skillIndex)
     {
-        SkillAction chosenSkill = playerData.skills[skillIndex];
-
-        // Cek MP
-        if (playerUnit.currentMP >= chosenSkill.mpCost)
+        SkillAction chosenSkill = playerTeamData[currentPlayerIndex].skills[skillIndex];
+        if (currentActingUnit.currentMP >= chosenSkill.mpCost)
         {
-            // Tutup semua UI
-            skillListPanel.SetActive(false);
-            actionPanel.SetActive(false);
-
-            StartCoroutine(PlayerUseSkill(chosenSkill));
+            pendingSkillIndex = skillIndex;
+            StartTargetingMode(ActionType.SKILL);
         }
-        else
-        {
-            Debug.Log("MP Tidak Cukup untuk " + chosenSkill.skillName + "!");
-        }
+        else Debug.Log("MP Tidak Cukup!");
     }
 
-    // --- FUNGSI INI AKAN DIPANGGIL OLEH TOMBOL UI ---
-    public void OnAttackButton()
-    {
-        // Cegah spam klik jika bukan giliran player
-        if (state != BattleState.PLAYERTURN) return;
-
-        // Sembunyikan UI agar pemain tidak bisa klik 2 kali
-        actionPanel.SetActive(false);
-
-        // Mulai proses serang
-        StartCoroutine(PlayerAttack());
-    }
-
-    private IEnumerator PlayerAttack()
-    {
-        Debug.Log(playerUnit.unitName + " melakukan Basic Attack!");
-        bool isEnemyDead = false;
-
-        // --- 1. FASE MAJU (HANYA JIKA MELEE) ---
-        if (playerData.basicAttackType == SkillType.MELEE)
-        {
-            // --- LOGIKA MELEE LAMA ---
-            Vector3 attackPosition = enemyUnit.transform.position + new Vector3(-1.5f, 0, 0);
-            yield return StartCoroutine(MoveUnit(playerUnit.transform, attackPosition));
-
-            playerUnit.PlayAttackAnimation();
-            yield return new WaitForSeconds(0.5f);
-
-            isEnemyDead = enemyUnit.TakeDamage(playerUnit.baseDamage);
-            yield return new WaitForSeconds(0.5f);
-
-            yield return StartCoroutine(MoveUnit(playerUnit.transform, playerSpawnPoint.position));
-        }
-        else if (playerData.basicAttackType == SkillType.RANGED)
-        {
-            playerUnit.PlayAttackAnimation(); 
-            yield return new WaitForSeconds(0.3f); 
-
-            if (playerData.basicProjectilePrefab != null)
-            {
-                // Munculkan peluru bola api
-                GameObject proj = Instantiate(playerData.basicProjectilePrefab, playerUnit.transform.position, Quaternion.identity);
-                // Tunggu sampai peluru menabrak target
-                yield return StartCoroutine(MoveProjectile(proj, enemyUnit.transform.position));
-
-                // --- BARU: Munculkan efek ledakan setelah peluru menabrak ---
-                if (playerData.basicImpactPrefab != null)
-                {
-                    GameObject impact = Instantiate(playerData.basicImpactPrefab, enemyUnit.transform.position, Quaternion.identity);
-                    // Hancurkan efek ledakan otomatis setelah 0.5 detik (sesuaikan dengan durasi animasimu)
-                    Destroy(impact, 0.5f); 
-                }
-            }
-
-            isEnemyDead = enemyUnit.TakeDamage(playerUnit.baseDamage);
-        }
-        yield return new WaitForSeconds(0.5f);
-
-        // --- 4. CEK HASIL ---
-        if (isEnemyDead)
-        {
-            state = BattleState.WON;
-            EndBattle();
-        }
-        else
-        {
-            state = BattleState.ENEMYTURN;
-            StartCoroutine(EnemyTurn());
-        }
-    }
-    // --- FUNGSI INI AKAN DIPANGGIL OLEH TOMBOL SKILL UI ---
-    // --- FUNGSI INI DIPANGGIL OLEH TOMBOL (KITA KIRIM ANGKA INDEX 0 ATAU 1) ---
-    public void OnSkillButton(int skillIndex)
-    {
-        if (state != BattleState.PLAYERTURN) return;
-
-        // Cegah error jika karakter tidak punya skill di index tersebut
-        if (skillIndex >= playerData.skills.Count)
-        {
-            Debug.LogWarning("Skill belum diatur di Unit Data!");
-            return;
-        }
-
-        SkillAction chosenSkill = playerData.skills[skillIndex];
-
-        if (playerUnit.currentMP >= chosenSkill.mpCost)
-        {
-            actionPanel.SetActive(false);
-            StartCoroutine(PlayerUseSkill(chosenSkill)); // Lempar paket data skill ke wasit
-        }
-        else
-        {
-            Debug.Log("MP Tidak Cukup!");
-        }
-    }
-
-private IEnumerator PlayerUseSkill(SkillAction skill)
-    {
-        Debug.Log(playerUnit.unitName + " menggunakan " + skill.skillName + "!");
-        playerUnit.ConsumeMP(skill.mpCost);
-        bool isEnemyDead = false;
-
-        if (skill.skillType == SkillType.MELEE)
-        {
-            // --- LOGIKA MELEE ---
-            Vector3 attackPosition = enemyUnit.transform.position + new Vector3(-1.5f, 0, 0);
-            yield return StartCoroutine(MoveUnit(playerUnit.transform, attackPosition));
-            
-            playerUnit.PlayCustomAnimation(skill.animTriggerName);
-            yield return new WaitForSeconds(0.5f);
-            
-            isEnemyDead = enemyUnit.TakeDamage(skill.damage);
-            yield return new WaitForSeconds(0.5f);
-            
-            yield return StartCoroutine(MoveUnit(playerUnit.transform, playerSpawnPoint.position));
-        }
-        else if (skill.skillType == SkillType.RANGED)
-        {
-            playerUnit.PlayCustomAnimation(skill.animTriggerName);
-            yield return new WaitForSeconds(0.3f);
-            
-            if (skill.skillEffectPrefab != null)
-            {
-                GameObject proj = Instantiate(skill.skillEffectPrefab, playerUnit.transform.position, Quaternion.identity);
-                yield return StartCoroutine(MoveProjectile(proj, enemyUnit.transform.position));
-
-                // --- BARU: Munculkan efek ledakan Super Fireball ---
-                if (skill.skillImpactPrefab != null)
-                {
-                    GameObject impact = Instantiate(skill.skillImpactPrefab, enemyUnit.transform.position, Quaternion.identity);
-                    Destroy(impact, 0.5f); 
-                }
-            }
-            
-            isEnemyDead = enemyUnit.TakeDamage(skill.damage);
-        }
-        else if (skill.skillType == SkillType.DOT_DEBUFF)
-        {
-            // --- LOGIKA SUMMON FIRE (BAKAR) ---
-            playerUnit.PlayCustomAnimation(skill.animTriggerName);
-            yield return new WaitForSeconds(0.5f); // Wizard cast spell
-            
-            if (skill.skillEffectPrefab != null)
-            {
-                // Munculkan api LANGSUNG di tubuh musuh (tidak melesat)
-                GameObject fireEffect = Instantiate(skill.skillEffectPrefab, enemyUnit.transform.position, Quaternion.identity);
-                Destroy(fireEffect, 1.5f); // Hancurkan visual api setelah 1.5 detik
-            }
-            
-            // Terapkan efek bakaran tanpa memberikan instant damage
-            enemyUnit.ApplyBurn(skill.damage, skill.effectDuration);
-        }
-
-        yield return new WaitForSeconds(0.5f);
-
-        // --- CEK HASIL ---
-        if (isEnemyDead)
-        {
-            state = BattleState.WON;
-            EndBattle();
-        }
-        else
-        {
-            state = BattleState.ENEMYTURN;
-            StartCoroutine(EnemyTurn());
-        }
-    }
     public void ToggleItemPanel()
     {
         if (state != BattleState.PLAYERTURN) return;
-
-        // --- BARU: Cegah panel terbuka jika sudah pakai item ---
         if (hasUsedItemThisTurn)
         {
-            Debug.Log("Kamu hanya bisa menggunakan 1 item per giliran!");
-            return; // Hentikan fungsi di sini
+            Debug.Log("Hanya bisa pakai 1 item per giliran!");
+            return; 
         }
+
         bool isActive = itemListPanel.activeSelf;
-        
-        // Tutup panel skill jika sedang terbuka agar layar tidak penuh
-        skillListPanel.SetActive(false); 
         CloseAllSubPanels();
         itemListPanel.SetActive(!isActive);
-
-        if (!isActive)
-        {
-            PopulateItemList();
-        }
+        if (!isActive) PopulateItemList();
     }
 
-    // --- FUNGSI BARU: Membuat Tombol Item Dinamis ---
     private void PopulateItemList()
     {
         foreach (Transform child in itemListContainer) Destroy(child.gameObject);
@@ -389,224 +294,396 @@ private IEnumerator PlayerUseSkill(SkillAction skill)
         for (int i = 0; i < battleItems.Count; i++)
         {
             int index = i;
-            BattleItemSlot slot = battleItems[i]; // UBAH: Ambil slot-nya
+            BattleItemSlot slot = battleItems[i]; 
 
             if (slot.currentStock > 0)
             {
                 GameObject newBtnObj = Instantiate(itemButtonPrefab, itemListContainer);
-                
                 TextMeshProUGUI btnText = newBtnObj.GetComponentInChildren<TextMeshProUGUI>();
-                // UBAH: Panggil slot.itemSO untuk mendapatkan namanya
                 btnText.text = slot.itemSO.itemName + " (x" + slot.currentStock + ")";
 
                 Transform iconTransform = newBtnObj.transform.Find("Icon");
                 if (iconTransform != null && slot.itemSO.itemIcon != null)
                 {
-                    // UBAH: Panggil slot.itemSO untuk mendapatkan gambarnya
                     iconTransform.GetComponent<Image>().sprite = slot.itemSO.itemIcon;
                 }
 
                 Button btn = newBtnObj.GetComponent<Button>();
-                btn.onClick.AddListener(() => ExecuteItem(index));
+                btn.onClick.AddListener(() => ExecuteItemButton(index));
             }
         }
     }
 
-    // --- FUNGSI BARU: Eksekusi Penggunaan Item ---
-    public void ExecuteItem(int itemIndex)
+    public void ExecuteItemButton(int itemIndex)
     {
-        BattleItemSlot chosenSlot = battleItems[itemIndex];
+        pendingItemIndex = itemIndex;
+        StartTargetingMode(ActionType.ITEM);
+    }
 
-        if (chosenSlot.currentStock > 0)
+
+    // ==========================================
+    // BAGIAN 2: MENDETEKSI KLIK MOUSE KE KARAKTER
+    // ==========================================
+
+// --- FUNGSI BARU: Eksekusi Target saat Spasi/Enter ditekan ---
+    private void ConfirmTarget()
+    {
+        Unit selectedUnit = validTargets[currentTargetIndex];
+        selectedUnit.SetTargetIndicator(false); // Matikan bayangan
+        
+        state = BattleState.BUSY; 
+
+        if (pendingAction == ActionType.ATTACK)
         {
-            // Kurangi stok di slot
-            chosenSlot.currentStock--;
-
-            CloseAllSubPanels();
-            actionPanel.SetActive(false);
-
-            // UBAH: Lempar data SO ke fungsi PlayerUseItem
-            StartCoroutine(PlayerUseItem(chosenSlot.itemSO)); 
+            StartCoroutine(PlayerAttack(selectedUnit));
+        }
+        else if (pendingAction == ActionType.SKILL)
+        {
+            SkillAction skill = playerTeamData[currentPlayerIndex].skills[pendingSkillIndex];
+            StartCoroutine(PlayerUseSkill(skill, selectedUnit));
+        }
+        else if (pendingAction == ActionType.ITEM)
+        {
+            BattleItemSlot slot = battleItems[pendingItemIndex];
+            slot.currentStock--;
+            StartCoroutine(PlayerUseItem(slot.itemSO, selectedUnit));
         }
     }
 
-    private IEnumerator PlayerUseItem(ItemData item) 
-    {
-        Debug.Log(playerUnit.unitName + " menggunakan " + item.itemName + "!");
 
-        // 1. Tandai bahwa item sudah dipakai turn ini
+    // ==========================================
+    // BAGIAN 3: EKSEKUSI AKSI 
+    // ==========================================
+
+    private IEnumerator PlayerDefend()
+    {
+        Debug.Log(currentActingUnit.unitName + " mengambil posisi bertahan!");
+        currentActingUnit.SetDefending(true);
+        yield return new WaitForSeconds(0.5f); 
+        NextTurnProcessor(); // Lanjut ke orang berikutnya
+    }
+
+    private IEnumerator PlayerAttack(Unit targetUnit)
+    {
+        bool isEnemyDead = false;
+        UnitData actingData = playerTeamData[currentPlayerIndex];
+
+        if (actingData.basicAttackType == SkillType.MELEE)
+        {
+            Vector3 attackPosition = targetUnit.transform.position + new Vector3(-1.5f, 0, 0);
+            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, attackPosition));
+
+            currentActingUnit.PlayAttackAnimation();
+            yield return new WaitForSeconds(0.5f);
+
+            isEnemyDead = targetUnit.TakeDamage(actingData.baseDamage);
+            yield return new WaitForSeconds(0.5f);
+
+            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, playerStations[currentPlayerIndex].position));
+        }
+        else if (actingData.basicAttackType == SkillType.RANGED)
+        {
+            currentActingUnit.PlayAttackAnimation(); 
+            yield return new WaitForSeconds(0.3f); 
+
+            if (actingData.basicProjectilePrefab != null)
+            {
+                GameObject proj = Instantiate(actingData.basicProjectilePrefab, currentActingUnit.transform.position, Quaternion.identity);
+                yield return StartCoroutine(MoveProjectile(proj, targetUnit.transform.position));
+
+                if (actingData.basicImpactPrefab != null)
+                {
+                    GameObject impact = Instantiate(actingData.basicImpactPrefab, targetUnit.transform.position, Quaternion.identity);
+                    Destroy(impact, 0.5f); 
+                }
+            }
+            isEnemyDead = targetUnit.TakeDamage(actingData.baseDamage);
+        }
+        
+        yield return new WaitForSeconds(0.5f);
+
+        if (isEnemyDead)
+        {
+            activeEnemyUnits.Remove(targetUnit);
+            targetUnit.Die();
+        }
+        NextTurnProcessor();
+    }
+
+    private IEnumerator PlayerUseSkill(SkillAction skill, Unit targetUnit)
+    {
+        currentActingUnit.ConsumeMP(skill.mpCost);
+        bool isEnemyDead = false;
+
+        if (skill.skillType == SkillType.MELEE)
+        {
+            Vector3 attackPosition = targetUnit.transform.position + new Vector3(-1.5f, 0, 0);
+            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, attackPosition));
+            
+            currentActingUnit.PlayCustomAnimation(skill.animTriggerName);
+            yield return new WaitForSeconds(0.5f);
+            
+            isEnemyDead = targetUnit.TakeDamage(skill.damage);
+            yield return new WaitForSeconds(0.5f);
+            
+            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, playerStations[currentPlayerIndex].position));
+        }
+        else if (skill.skillType == SkillType.RANGED)
+        {
+            currentActingUnit.PlayCustomAnimation(skill.animTriggerName);
+            yield return new WaitForSeconds(0.3f);
+            
+            if (skill.skillEffectPrefab != null)
+            {
+                GameObject proj = Instantiate(skill.skillEffectPrefab, currentActingUnit.transform.position, Quaternion.identity);
+                yield return StartCoroutine(MoveProjectile(proj, targetUnit.transform.position));
+
+                if (skill.skillImpactPrefab != null)
+                {
+                    GameObject impact = Instantiate(skill.skillImpactPrefab, targetUnit.transform.position, Quaternion.identity);
+                    Destroy(impact, 0.5f); 
+                }
+            }
+            isEnemyDead = targetUnit.TakeDamage(skill.damage);
+        }
+        else if (skill.skillType == SkillType.DOT_DEBUFF)
+        {
+            currentActingUnit.PlayCustomAnimation(skill.animTriggerName);
+            yield return new WaitForSeconds(0.5f); 
+            
+            if (skill.skillEffectPrefab != null)
+            {
+                GameObject fireEffect = Instantiate(skill.skillEffectPrefab, targetUnit.transform.position, Quaternion.identity);
+                Destroy(fireEffect, 1.5f); 
+            }
+            targetUnit.ApplyBurn(skill.damage, skill.effectDuration);
+        }
+
+        yield return new WaitForSeconds(0.5f);
+
+        if (isEnemyDead)
+        {
+            activeEnemyUnits.Remove(targetUnit);
+            targetUnit.Die();
+        }
+        NextTurnProcessor();
+    }
+
+    private IEnumerator PlayerUseItem(ItemData item, Unit targetUnit)
+    {
         hasUsedItemThisTurn = true;
 
-        if (item.hpHealAmount > 0) playerUnit.HealHP(item.hpHealAmount);
-        if (item.mpHealAmount > 0) playerUnit.HealMP(item.mpHealAmount);
+        if (item.hpHealAmount > 0) targetUnit.HealHP(item.hpHealAmount);
+        if (item.mpHealAmount > 0) targetUnit.HealMP(item.mpHealAmount);
 
-        // 2. Beri jeda agar pemain melihat efek heal
         yield return new WaitForSeconds(1f);
 
-        // --- UBAH: Jangan pindah ke giliran musuh! ---
-        // HAPUS ATAU JADIKAN KOMENTAR BARIS DI BAWAH INI:
-        // state = BattleState.ENEMYTURN;
-        // StartCoroutine(EnemyTurn());
-
-        // --- BARU: Munculkan kembali tombol Attack/Skill/Defend ---
+        // Munculkan menu lagi (Free action item)
+        state = BattleState.PLAYERTURN;
         actionPanel.SetActive(true);
+    }
+
+
+    // ==========================================
+    // BAGIAN 4: PEMINDAH GILIRAN & MUSUH
+    // ==========================================
+
+    private void NextTurnProcessor()
+    {
+        // --- BARU: Matikan ikon karakter yang gilirannya baru saja selesai ---
+        if (currentActingUnit != null) currentActingUnit.SetTurnIndicator(false);
+        if (activeEnemyUnits.Count == 0)
+        {
+            state = BattleState.WON;
+            EndBattle();
+            return;
+        }
+
+        currentPlayerIndex++;
+        
+        if (currentPlayerIndex >= activePlayerUnits.Count)
+        {
+            state = BattleState.ENEMYTURN;
+            StartCoroutine(EnemyTurn());
+        }
+        else
+        {
+            StartPlayerTurn();
+        }
     }
 
     private IEnumerator EnemyTurn()
     {
-        Debug.Log("Giliran Musuh!");
-        enemyUnit.SetDefending(false);
-        yield return new WaitForSeconds(1f); // Jeda musuh "berpikir"
+        Debug.Log("Giliran Tim Musuh!");
 
-        // --- KECERDASAN BUATAN (AI) MUSUH SEDERHANA ---
-        bool useSkill = false;
-        SkillAction chosenSkill = null;
-
-        // 1. Cek apakah musuh punya skill di SO-nya
-        if (enemyData.skills.Count > 0)
+        for (int i = 0; i < activeEnemyUnits.Count; i++)
         {
-            // 2. Beri peluang 50% musuh akan mencoba pakai skill (agar tidak spam skill terus)
-            if (Random.Range(0, 100) < 50)
+            Unit eUnit = activeEnemyUnits[i];
+            eUnit.SetTurnIndicator(true);
+            
+            // Cek status bakar musuh di awal gilirannya
+            if (eUnit.burnTurnsLeft > 0)
             {
-                // Pilih skill secara acak dari daftar skill yang dia miliki
-                int randomIndex = Random.Range(0, enemyData.skills.Count);
-                chosenSkill = enemyData.skills[randomIndex];
-
-                // 3. Pastikan MP musuh cukup untuk memanggil skill tersebut
-                if (enemyUnit.currentMP >= chosenSkill.mpCost)
+                bool deadByBurn = eUnit.TakeBurnDamage();
+                if (deadByBurn)
                 {
-                    useSkill = true;
+                    activeEnemyUnits.Remove(eUnit);
+                    eUnit.Die();
+                    continue; // Skip ke musuh berikutnya
                 }
             }
-        }
 
-        // Variabel untuk menampung apakah serangan (apa pun itu) berhasil membunuh player
-        bool isPlayerDead = false;
+            eUnit.SetDefending(false);
+            yield return new WaitForSeconds(1f); 
 
-        // --- EKSEKUSI SERANGAN ---
-        if (useSkill)
-        {
-            // MUSUH MENGGUNAKAN SKILL
-            Debug.Log(enemyUnit.unitName + " menggunakan skill: " + chosenSkill.skillName + "!");
-            enemyUnit.ConsumeMP(chosenSkill.mpCost);
+            // AI Sederhana: Pilih Pemain Acak
+            if (activePlayerUnits.Count == 0) break;
+            int randomTarget = Random.Range(0, activePlayerUnits.Count);
+            Unit pTarget = activePlayerUnits[randomTarget];
 
-            // FASE MAJU (Hanya jika Melee)
-            if (chosenSkill.skillType == SkillType.MELEE)
+            bool useSkill = false;
+            SkillAction chosenSkill = null;
+            UnitData eData = enemyTeamData[i];
+
+            if (eData.skills.Count > 0 && Random.Range(0, 100) < 50)
             {
-                // Musuh bergeraknya ke arah kiri (positif 1.5f)
-                Vector3 attackPosition = playerUnit.transform.position + new Vector3(1.5f, 0, 0);
-                yield return StartCoroutine(MoveUnit(enemyUnit.transform, attackPosition));
+                int randomSkillIdx = Random.Range(0, eData.skills.Count);
+                chosenSkill = eData.skills[randomSkillIdx];
+                if (eUnit.currentMP >= chosenSkill.mpCost) useSkill = true;
             }
 
-            // MUKUL PAKAI ANIMASI SKILL
-            enemyUnit.PlayCustomAnimation(chosenSkill.animTriggerName);
-            yield return new WaitForSeconds(0.5f);
+            bool isPlayerDead = false;
 
-            // PENTING: Gunakan damage dari skill, bukan base damage!
-            isPlayerDead = playerUnit.TakeDamage(chosenSkill.damage);
-            yield return new WaitForSeconds(0.5f);
-
-            // FASE MUNDUR (Hanya jika Melee)
-            if (chosenSkill.skillType == SkillType.MELEE)
+            if (useSkill)
             {
-                yield return StartCoroutine(MoveUnit(enemyUnit.transform, enemySpawnPoint.position));
-                yield return new WaitForSeconds(0.5f);
-            }
-        }
-        else
-        {
-            // MUSUH MENGGUNAKAN BASIC ATTACK
-            Debug.Log(enemyUnit.unitName + " melakukan Basic Attack!");
+                eUnit.ConsumeMP(chosenSkill.mpCost);
 
-            // FASE MAJU (HANYA JIKA MELEE)
-            if (enemyData.basicAttackType == SkillType.MELEE)
-            {
-                Vector3 attackPosition = playerUnit.transform.position + new Vector3(1.5f, 0, 0);
-                yield return StartCoroutine(MoveUnit(enemyUnit.transform, attackPosition));
-            }
-
-            enemyUnit.PlayAttackAnimation();
-            yield return new WaitForSeconds(0.5f);
-
-            isPlayerDead = playerUnit.TakeDamage(enemyUnit.baseDamage);
-            yield return new WaitForSeconds(0.5f);
-
-            // FASE MUNDUR (HANYA JIKA MELEE)
-            if (enemyData.basicAttackType == SkillType.MELEE)
-            {
-                yield return StartCoroutine(MoveUnit(enemyUnit.transform, enemySpawnPoint.position));
-                yield return new WaitForSeconds(0.5f);
-            }
-        }
-
-        // --- CEK HASIL PERTARUNGAN ---
-        if (isPlayerDead)
-        {
-            state = BattleState.LOST;
-            EndBattle();
-        }
-        else
-        {
-            // --- BARU: Cek jika musuh sedang terbakar sebelum melempar giliran ke pemain ---
-            if (enemyUnit.burnTurnsLeft > 0)
-            {
-                bool deadByBurn = enemyUnit.TakeBurnDamage(); // Kena damage bakaran 10
-                yield return new WaitForSeconds(1f); // Beri waktu pemain melihat musuh kepanasan
-                
-                if (deadByBurn) 
+                if (chosenSkill.skillType == SkillType.MELEE)
                 {
-                    state = BattleState.WON;
+                    Vector3 attackPos = pTarget.transform.position + new Vector3(1.5f, 0, 0);
+                    yield return StartCoroutine(MoveUnit(eUnit.transform, attackPos));
+
+                    eUnit.PlayCustomAnimation(chosenSkill.animTriggerName);
+                    yield return new WaitForSeconds(0.5f);
+
+                    isPlayerDead = pTarget.TakeDamage(chosenSkill.damage);
+                    yield return new WaitForSeconds(0.5f);
+
+                    yield return StartCoroutine(MoveUnit(eUnit.transform, enemyStations[i].position));
+                }
+                else if (chosenSkill.skillType == SkillType.RANGED)
+                {
+                    eUnit.PlayCustomAnimation(chosenSkill.animTriggerName);
+                    yield return new WaitForSeconds(0.3f);
+
+                    if (chosenSkill.skillEffectPrefab != null)
+                    {
+                        GameObject proj = Instantiate(chosenSkill.skillEffectPrefab, eUnit.transform.position, Quaternion.identity);
+                        yield return StartCoroutine(MoveProjectile(proj, pTarget.transform.position));
+
+                        if (chosenSkill.skillImpactPrefab != null)
+                        {
+                            GameObject impact = Instantiate(chosenSkill.skillImpactPrefab, pTarget.transform.position, Quaternion.identity);
+                            Destroy(impact, 0.5f);
+                        }
+                    }
+                    isPlayerDead = pTarget.TakeDamage(chosenSkill.damage);
+                }
+                else if (chosenSkill.skillType == SkillType.DOT_DEBUFF)
+                {
+                    eUnit.PlayCustomAnimation(chosenSkill.animTriggerName);
+                    yield return new WaitForSeconds(0.5f);
+
+                    if (chosenSkill.skillEffectPrefab != null)
+                    {
+                        GameObject fireEffect = Instantiate(chosenSkill.skillEffectPrefab, pTarget.transform.position, Quaternion.identity);
+                        Destroy(fireEffect, 1.5f); 
+                    }
+                    pTarget.ApplyBurn(chosenSkill.damage, chosenSkill.effectDuration);
+                }
+            }
+            else
+            {
+                if (eData.basicAttackType == SkillType.MELEE)
+                {
+                    Vector3 attackPos = pTarget.transform.position + new Vector3(1.5f, 0, 0);
+                    yield return StartCoroutine(MoveUnit(eUnit.transform, attackPos));
+
+                    eUnit.PlayAttackAnimation(); 
+                    yield return new WaitForSeconds(0.5f);
+
+                    isPlayerDead = pTarget.TakeDamage(eData.baseDamage);
+                    yield return new WaitForSeconds(0.5f);
+
+                    yield return StartCoroutine(MoveUnit(eUnit.transform, enemyStations[i].position));
+                }
+                else if (eData.basicAttackType == SkillType.RANGED)
+                {
+                    eUnit.PlayAttackAnimation(); 
+                    yield return new WaitForSeconds(0.3f);
+
+                    if (eData.basicProjectilePrefab != null)
+                    {
+                        GameObject proj = Instantiate(eData.basicProjectilePrefab, eUnit.transform.position, Quaternion.identity);
+                        yield return StartCoroutine(MoveProjectile(proj, pTarget.transform.position));
+
+                        if (eData.basicImpactPrefab != null)
+                        {
+                            GameObject impact = Instantiate(eData.basicImpactPrefab, pTarget.transform.position, Quaternion.identity);
+                            Destroy(impact, 0.5f);
+                        }
+                    }
+                    isPlayerDead = pTarget.TakeDamage(eData.baseDamage);
+                }
+            }
+            eUnit.SetTurnIndicator(false);
+            if (isPlayerDead)
+            {
+                activePlayerUnits.Remove(pTarget);
+                pTarget.Die();
+                if (activePlayerUnits.Count == 0)
+                {
+                    state = BattleState.LOST;
                     EndBattle();
-                    yield break; // Hentikan fungsi jika musuh mati karena api
+                    yield break;
                 }
             }
-
-            state = BattleState.PLAYERTURN;
-            PlayerTurn();
         }
+
+        // Kembali ke giliran pemain pertama
+        currentPlayerIndex = 0;
+        StartPlayerTurn();
     }
 
     private void EndBattle()
     {
-        if (state == BattleState.WON)
-        {
-            Debug.Log("Kamu Menang! Pertarungan Selesai.");
-            // Logika kembali ke Scene Eksplorasi akan kita buat nanti
-        }
-        else if (state == BattleState.LOST)
-        {
-            Debug.Log("Kamu Kalah... Game Over.");
-        }
+        if (state == BattleState.WON) Debug.Log("Kamu Menang! Pertarungan Selesai.");
+        else if (state == BattleState.LOST) Debug.Log("Kamu Kalah... Game Over.");
     }
-    // --- FUNGSI BARU: Menggerakkan karakter secara halus ---
+
     private IEnumerator MoveUnit(Transform unitTransform, Vector3 targetPos)
     {
-        float lariSpeed = 15f; // Kecepatan maju/mundur (bisa kamu ubah)
-
-        // Selama jarak karakter dan target masih jauh, terus geser posisinya
+        float lariSpeed = 15f; 
         while (Vector3.Distance(unitTransform.position, targetPos) > 0.01f)
         {
-            // Vector3.MoveTowards mengatur pergerakan dari titik A ke titik B
             unitTransform.position = Vector3.MoveTowards(unitTransform.position, targetPos, lariSpeed * Time.deltaTime);
-            yield return null; // Tunggu frame berikutnya
+            yield return null; 
         }
-
-        // Pastikan posisi akhirnya pas
         unitTransform.position = targetPos;
     }
-    // --- FUNGSI BARU: Menggerakkan peluru bola api ---
+
     private IEnumerator MoveProjectile(GameObject projectile, Vector3 targetPos)
     {
-        float speed = 25f; // Kecepatan peluru melesat
-        
-        // Selama peluru belum sampai, terus geser
+        float speed = 25f; 
+        if (projectile != null && targetPos.x < projectile.transform.position.x)
+        {
+            projectile.transform.localRotation = Quaternion.Euler(0, 180, 0);
+        }
         while (projectile != null && Vector3.Distance(projectile.transform.position, targetPos) > 0.1f)
         {
             projectile.transform.position = Vector3.MoveTowards(projectile.transform.position, targetPos, speed * Time.deltaTime);
             yield return null;
         }
-        
-        // Hancurkan peluru saat mengenai target
         if (projectile != null) Destroy(projectile); 
     }
 }

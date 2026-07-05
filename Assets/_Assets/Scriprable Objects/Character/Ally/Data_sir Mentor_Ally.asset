@@ -13,7 +13,29 @@ MonoBehaviour:
   m_Name: Data_sir Mentor_Ally
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   unitName: Sir Mentor
-  unitSprite: {fileID: 0}
+  unitSprite: {fileID: 868370677313445676, guid: 925966422b1460d4d9cb4fcc5df1e494, type: 3}
   isPlayerTeam: 1
-  maxHP: 100
+  animatorController: {fileID: 9100000, guid: 91b403e055c34884b9e3c481e6ec7921, type: 2}
+  maxHP: 120
+  maxMP: 100
   baseDamage: 10
+  basicAttackType: 0
+  basicProjectilePrefab: {fileID: 0}
+  basicImpactPrefab: {fileID: 0}
+  skills:
+  - skillName: Heavy Attack
+    skillType: 0
+    damage: 30
+    mpCost: 20
+    animTriggerName: HA
+    skillEffectPrefab: {fileID: 0}
+    skillImpactPrefab: {fileID: 0}
+    effectDuration: 0
+  - skillName: Double Attack
+    skillType: 0
+    damage: 40
+    mpCost: 50
+    animTriggerName: DA
+    skillEffectPrefab: {fileID: 0}
+    skillImpactPrefab: {fileID: 0}
+    effectDuration: 0

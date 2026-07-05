@@ -21,6 +21,10 @@ public class Unit : MonoBehaviour
 
     public GameObject defendIcon;
     public bool isDefending;
+    [Header("Referensi Targeting (Baru)")]
+    public GameObject targetShadow;
+    public GameObject turnIndicator; 
+    public bool isDead = false;
 
     public void SetupUnit(UnitData data)
     {
@@ -226,5 +230,34 @@ public class Unit : MonoBehaviour
             return TakeDamage(burnDamagePerTurn); // Gunakan fungsi TakeDamage yang sudah ada
         }
         return false;
+    }
+    // FUNGSI BARU 1: Menyalakan/Mematikan Bayangan
+    public void SetTargetIndicator(bool isActive)
+    {
+        if (targetShadow != null) targetShadow.SetActive(isActive);
+    }
+
+    // --- FUNGSI BARU: Menyalakan/Mematikan Indikator Turn ---
+    public void SetTurnIndicator(bool isActive)
+    {
+        if (isDead) return; // Jika mati, jangan nyalakan indikator
+        if (turnIndicator != null) turnIndicator.SetActive(isActive);
+    }
+
+    // --- FUNGSI BARU: Logika Mati (Tanpa Destroy GameObject) ---
+    public void Die()
+    {
+        isDead = true;
+        currentHP = 0;
+        UpdateHealthBar();
+
+        if (animator != null) animator.SetTrigger("Die"); // Memanggil animasi mati
+
+        // Matikan semua indikator agar bersih
+        SetTargetIndicator(false);
+        SetTurnIndicator(false);
+        if (defendIcon != null) defendIcon.SetActive(false);
+
+        Debug.Log(unitName + " telah gugur!");
     }
 }
