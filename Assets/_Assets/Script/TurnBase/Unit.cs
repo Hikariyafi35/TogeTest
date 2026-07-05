@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI; 
-
+using TMPro;
 public class Unit : MonoBehaviour
 {
     [Header("Referensi Komponen (Tarik dari Child)")]
@@ -157,6 +157,50 @@ public class Unit : MonoBehaviour
         if (animator != null && !string.IsNullOrEmpty(triggerName))
         {
             animator.SetTrigger(triggerName);
+        }
+    }
+    // --- FUNGSI BARU: Untuk memulihkan HP karena Item ---
+    public void HealHP(int amount)
+    {
+        currentHP += amount;
+
+        // Mencegah HP melebihi batas maksimal
+        if (currentHP > maxHP)
+        {
+            currentHP = maxHP;
+        }
+
+        UpdateHealthBar();
+
+        // Munculkan teks melayang (Kamu bisa mengubah warnanya menjadi hijau nanti di DamageText)
+        if (damageTextPrefab != null)
+        {
+            Vector3 spawnPosition = transform.position + new Vector3(0, 1.0f, 0);
+            GameObject floatingText = Instantiate(damageTextPrefab, spawnPosition, Quaternion.identity);
+            floatingText.GetComponent<DamageText>().Setup("+" + amount.ToString());
+        }
+    }
+    // --- FUNGSI BARU: Untuk memulihkan MP ---
+    public void HealMP(int amount)
+    {
+        if (amount <= 0) return; // Jika item tidak memulihkan MP, lewati fungsi ini
+
+        currentMP += amount;
+        if (currentMP > maxMP) currentMP = maxMP;
+
+        UpdateManaBar();
+
+        if (damageTextPrefab != null)
+        {
+            // Munculkan teks sedikit lebih tinggi agar tidak menumpuk dengan teks HP
+            Vector3 spawnPosition = transform.position + new Vector3(0, 1.5f, 0); 
+            GameObject floatingText = Instantiate(damageTextPrefab, spawnPosition, Quaternion.identity);
+            
+            floatingText.GetComponent<DamageText>().Setup("+" + amount + " MP");
+
+            // Opsional: Ubah warna teks menjadi Biru (Cyan) khusus untuk MP
+            TextMeshPro textMesh = floatingText.GetComponent<TextMeshPro>();
+            if (textMesh != null) textMesh.color = Color.cyan;
         }
     }
 }
