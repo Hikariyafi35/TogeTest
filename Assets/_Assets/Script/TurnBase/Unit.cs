@@ -23,8 +23,9 @@ public class Unit : MonoBehaviour
     public bool isDefending;
     [Header("Referensi Targeting (Baru)")]
     public GameObject targetShadow;
-    public GameObject turnIndicator; 
+    public GameObject turnIndicator;
     public bool isDead = false;
+    [HideInInspector] public Vector3 originalPosition;
 
     public void SetupUnit(UnitData data)
     {

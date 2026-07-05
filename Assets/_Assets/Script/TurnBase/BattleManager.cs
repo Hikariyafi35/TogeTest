@@ -125,6 +125,7 @@ public class BattleManager : MonoBehaviour
                 GameObject pGo = Instantiate(battleUnitPrefab, playerStations[i]);
                 Unit pUnit = pGo.GetComponent<Unit>();
                 pUnit.SetupUnit(playerTeamData[i]);
+                pUnit.originalPosition = playerStations[i].position;
                 activePlayerUnits.Add(pUnit);
             }
         }
@@ -137,6 +138,7 @@ public class BattleManager : MonoBehaviour
                 GameObject eGo = Instantiate(battleUnitPrefab, enemyStations[i]);
                 Unit eUnit = eGo.GetComponent<Unit>();
                 eUnit.SetupUnit(enemyTeamData[i]);
+                eUnit.originalPosition = enemyStations[i].position;
                 activeEnemyUnits.Add(eUnit);
             }
         }
@@ -379,7 +381,7 @@ public class BattleManager : MonoBehaviour
             isEnemyDead = targetUnit.TakeDamage(actingData.baseDamage);
             yield return new WaitForSeconds(0.5f);
 
-            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, playerStations[currentPlayerIndex].position));
+            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, currentActingUnit.originalPosition));
         }
         else if (actingData.basicAttackType == SkillType.RANGED)
         {
@@ -426,7 +428,7 @@ public class BattleManager : MonoBehaviour
             isEnemyDead = targetUnit.TakeDamage(skill.damage);
             yield return new WaitForSeconds(0.5f);
             
-            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, playerStations[currentPlayerIndex].position));
+            yield return StartCoroutine(MoveUnit(currentActingUnit.transform, currentActingUnit.originalPosition));
         }
         else if (skill.skillType == SkillType.RANGED)
         {
@@ -569,7 +571,7 @@ public class BattleManager : MonoBehaviour
                     isPlayerDead = pTarget.TakeDamage(chosenSkill.damage);
                     yield return new WaitForSeconds(0.5f);
 
-                    yield return StartCoroutine(MoveUnit(eUnit.transform, enemyStations[i].position));
+                    yield return StartCoroutine(MoveUnit(eUnit.transform, eUnit.originalPosition));
                 }
                 else if (chosenSkill.skillType == SkillType.RANGED)
                 {
@@ -615,7 +617,7 @@ public class BattleManager : MonoBehaviour
                     isPlayerDead = pTarget.TakeDamage(eData.baseDamage);
                     yield return new WaitForSeconds(0.5f);
 
-                    yield return StartCoroutine(MoveUnit(eUnit.transform, enemyStations[i].position));
+                    yield return StartCoroutine(MoveUnit(eUnit.transform, eUnit.originalPosition));
                 }
                 else if (eData.basicAttackType == SkillType.RANGED)
                 {
