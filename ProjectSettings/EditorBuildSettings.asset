@@ -8,6 +8,30 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Assets/Scenes/dialog1.unity
     guid: 8c9cfa26abfee488c85f1582747f6a02
+  - enabled: 1
+    path: Assets/_Assets/Scenes/BatlleScene1.unity
+    guid: e55531237a21f7d4cb4726ad61f03575
+  - enabled: 1
+    path: Assets/_Assets/Scenes/dialog2.unity
+    guid: a25a2180d43fa774280fb6e325144d3b
+  - enabled: 1
+    path: Assets/_Assets/Scenes/dialog3.unity
+    guid: 53b54ba4c84a7ca44a01f006d4e2cd68
+  - enabled: 1
+    path: Assets/_Assets/Scenes/BatlleScene2.unity
+    guid: a5afbc8f15efe52478ec7c3e58ee7da9
+  - enabled: 1
+    path: Assets/_Assets/Scenes/dialog4.unity
+    guid: 72c32e92161ee2648a5adbce03427688
+  - enabled: 1
+    path: Assets/_Assets/Scenes/dialog5.unity
+    guid: 8faa9e482647aa24d813f55642d36c5d
+  - enabled: 1
+    path: Assets/_Assets/Scenes/BatlleScene3.unity
+    guid: 69a372b6891f1024c932e1b86e6f76c2
+  - enabled: 1
+    path: Assets/_Assets/Scenes/credit.unity
+    guid: d6675e2060ebf394a8137cfebf48e900
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0

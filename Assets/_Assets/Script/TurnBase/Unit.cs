@@ -8,9 +8,10 @@ public class Unit : MonoBehaviour
     public Animator animator;
     public Image hpFillImage; 
     public Image mpFillImage; // --- BARU: Referensi Bar Mana (Biru) ---
-    public GameObject damageTextPrefab; 
+    public GameObject damageTextPrefab;
 
     [Header("Status Dinamis (Diisi Otomatis)")]
+    public UnitData unitData;
     public string unitName;
     public int currentHP;
     public int maxHP;
@@ -20,6 +21,7 @@ public class Unit : MonoBehaviour
     public bool isPlayer;
 
     public GameObject defendIcon;
+    
     public bool isDefending;
     [Header("Referensi Targeting (Baru)")]
     public GameObject targetShadow;
@@ -29,6 +31,7 @@ public class Unit : MonoBehaviour
 
     public void SetupUnit(UnitData data)
     {
+        unitData = data;
         unitName = data.unitName;
         isPlayer = data.isPlayerTeam;
         

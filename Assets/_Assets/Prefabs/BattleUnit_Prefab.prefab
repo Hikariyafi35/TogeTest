@@ -59,7 +59,7 @@ Canvas:
   m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
-  m_SortingLayerID: 0
+  m_SortingLayerID: 273458541
   m_SortingOrder: 0
   m_TargetDisplay: 0
 --- !u!114 &5376206761775834325
@@ -237,6 +237,7 @@ MonoBehaviour:
   hpFillImage: {fileID: 7877485263717744410}
   mpFillImage: {fileID: 4446030123245393466}
   damageTextPrefab: {fileID: 1660798198504173445, guid: d4d3b9ac611e2dd429966d79511cf963, type: 3}
+  unitData: {fileID: 0}
   unitName: 
   currentHP: 0
   maxHP: 0
@@ -249,6 +250,7 @@ MonoBehaviour:
   targetShadow: {fileID: 6572054456080359514}
   turnIndicator: {fileID: 5053221261432272110}
   isDead: 0
+  originalPosition: {x: 0, y: 0, z: 0}
   burnTurnsLeft: 0
   burnDamagePerTurn: 0
 --- !u!95 &-2847025006809831130
@@ -398,7 +400,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 273458541
-  m_SortingLayer: 3
+  m_SortingLayer: 4
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: -9095717837082945937, guid: 207ee8102dd4143d288186ef0be518ee, type: 3}
@@ -885,8 +887,8 @@ SpriteRenderer:
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: -770337679
+  m_SortingLayer: 3
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: 21300000, guid: a5b04c3253ab69a41b6945a4d20327e5, type: 3}
@@ -1051,12 +1053,12 @@ SpriteRenderer:
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: -770337679
+  m_SortingLayer: 3
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: 21300000, guid: 29fc18ec9013de145b516dfd3d4a7c43, type: 3}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 0.12641507, b: 0.12641507, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -1202,7 +1204,7 @@ Canvas:
   m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
-  m_SortingLayerID: 0
+  m_SortingLayerID: 273458541
   m_SortingOrder: 0
   m_TargetDisplay: 0
 --- !u!114 &5093916108057893

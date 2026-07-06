@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a8014dcb1134ba4b9a5a0662aaf1c53, type: 3}
+  m_Name: Slime
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitName: Slime
+  unitSprite: {fileID: -7282886668606283007, guid: 73428f1d3bfd03c4fa8a3e1e630930b5, type: 3}
+  isPlayerTeam: 0
+  animatorController: {fileID: 9100000, guid: 13adac7399386ed4d967be6d81b7e8d1, type: 2}
+  maxHP: 120
+  maxMP: 150
+  baseDamage: 10
+  basicAttackType: 0
+  basicProjectilePrefab: {fileID: 0}
+  basicImpactPrefab: {fileID: 0}
+  skills:
+  - skillName: Slime slash
+    skillType: 0
+    damage: 20
+    mpCost: 30
+    animTriggerName: SS
+    skillEffectPrefab: {fileID: 0}
+    skillImpactPrefab: {fileID: 0}
+    effectDuration: 0

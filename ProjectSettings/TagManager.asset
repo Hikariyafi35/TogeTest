@@ -47,6 +47,9 @@ TagManager:
   - name: Decor
     uniqueID: 684389275
     locked: 0
+  - name: Shadow
+    uniqueID: 3524629617
+    locked: 0
   - name: Player
     uniqueID: 273458541
     locked: 0

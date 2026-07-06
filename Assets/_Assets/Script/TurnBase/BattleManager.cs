@@ -4,6 +4,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 
 public enum BattleState { START, PLAYERTURN, WAITING_FOR_TARGET, BUSY, ENEMYTURN, WON, LOST }
 public enum ActionType { NONE, ATTACK, SKILL, ITEM }
@@ -36,12 +38,17 @@ public class BattleManager : MonoBehaviour
 
     [Header("UI Pertarungan")]
     public GameObject actionPanel; 
+    public GameObject firstMenuButton;
     public GameObject skillListPanel;      
     public Transform skillListContainer;   
     public GameObject skillItemPrefab;     
     public GameObject itemListPanel;      
-    public Transform itemListContainer;   
+    public Transform itemListContainer;
     public GameObject itemButtonPrefab;
+    [Header("UI Hasil Akhir (Baru)")]
+    public GameObject winPanel;
+    public GameObject losePanel;
+    public string nextSceneName = "WorldMap";
 
     [Header("Inventory Sementara")]
     public List<BattleItemSlot> battleItems = new List<BattleItemSlot>();
@@ -56,6 +63,7 @@ public class BattleManager : MonoBehaviour
     // --- BARU: Variabel Navigasi WASD ---
     private List<Unit> validTargets = new List<Unit>();
     private int currentTargetIndex = 0;
+    private bool isTargetingInputActive = false;
 
     private void Start()
     {
@@ -71,32 +79,62 @@ public class BattleManager : MonoBehaviour
         }
         StartCoroutine(SetupBattleTeam());
     }
-    private void Update()
+private void Update()
     {
-        if (state == BattleState.WAITING_FOR_TARGET && validTargets.Count > 0)
+        if (Keyboard.current == null) return;
+
+        // --- BARU: Memaksa tombol Space untuk mengklik tombol UI (Menu Utama/Skill/Item) ---
+        if (state == BattleState.PLAYERTURN && Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            // Cari tahu tombol apa yang sedang disorot (fokus) saat ini
+            GameObject selectedUI = EventSystem.current.currentSelectedGameObject;
+            if (selectedUI != null)
+            {
+                Button selectedBtn = selectedUI.GetComponent<Button>();
+                if (selectedBtn != null) selectedBtn.onClick.Invoke(); // Klik tombolnya!
+            }
+        }
+
+        // --- Logika untuk memilih target saat berada di fase penargetan ---
+        if (state == BattleState.WAITING_FOR_TARGET && validTargets.Count > 0 && isTargetingInputActive)
         {
             HandleTargetSelection();
         }
     }
 
-    private void HandleTargetSelection()
+private void HandleTargetSelection()
     {
         if (Keyboard.current == null) return;
+        
+        // --- BATAL: Menggunakan Backspace ATAU Escape ---
+        if (Keyboard.current.backspaceKey.wasPressedThisFrame || Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            CancelTargetingMode();
+            return; // Hentikan fungsi di sini
+        }
 
-        // W atau A untuk ke atas/kiri
+        // --- GESER ATAS: Menggunakan W atau A ---
         if (Keyboard.current.wKey.wasPressedThisFrame || Keyboard.current.aKey.wasPressedThisFrame)
         {
-            ChangeTarget(1); // --- UBAH: Sekarang pakai 1 ---
+            ChangeTarget(1); 
         }
-        // S atau D untuk ke bawah/kanan
+        // --- GESER BAWAH: Menggunakan S atau D ---
         else if (Keyboard.current.sKey.wasPressedThisFrame || Keyboard.current.dKey.wasPressedThisFrame)
         {
-            ChangeTarget(-1); // --- UBAH: Sekarang pakai -1 ---
+            ChangeTarget(-1); 
         }
-        else if (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.enterKey.wasPressedThisFrame)
+        // --- KONFIRMASI: HANYA menggunakan Spasi ---
+        else if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             ConfirmTarget();
         }
+    }
+    // --- FUNGSI BARU: Jeda sejenak sebelum Keyboard boleh memilih target ---
+    private IEnumerator EnableTargetingDelay()
+    {
+        isTargetingInputActive = false;
+        yield return new WaitForSeconds(0.1f); // Jeda 0.1 detik untuk "membuang" sisa input Enter dari UI
+        isTargetingInputActive = true;
     }
 
     private void ChangeTarget(int direction)
@@ -154,6 +192,35 @@ public class BattleManager : MonoBehaviour
         if (skillListPanel != null) skillListPanel.SetActive(false);
         if (itemListPanel != null) itemListPanel.SetActive(false);
     }
+    // --- FUNGSI BARU: Otomatis menyeleksi tombol untuk Keyboard ---
+    private void SetUIFocus(GameObject targetButton)
+    {
+        // Bersihkan fokus sebelumnya, lalu fokuskan ke tombol baru
+        EventSystem.current.SetSelectedGameObject(null);
+        EventSystem.current.SetSelectedGameObject(targetButton);
+    }
+
+    // --- FUNGSI BARU: Membatalkan pilihan target (Kembali ke menu) ---
+    private void CancelTargetingMode()
+    {
+        isTargetingInputActive = false; // --- BARU: Matikan pengaman ---
+        Debug.Log("Dibatalkan! Kembali ke menu utama.");
+        
+        // Matikan bayangan target saat ini
+        if (validTargets.Count > 0)
+        {
+            validTargets[currentTargetIndex].SetTargetIndicator(false);
+        }
+        validTargets.Clear();
+
+        // Kembalikan status game
+        state = BattleState.PLAYERTURN;
+        pendingAction = ActionType.NONE;
+
+        // Munculkan menu utama lagi dan fokuskan ke tombol pertama
+        actionPanel.SetActive(true);
+        SetUIFocus(firstMenuButton);
+    }
 
     // --- MENGELOLA GILIRAN PEMAIN INDIVIDU ---
     private void StartPlayerTurn()
@@ -184,6 +251,7 @@ public class BattleManager : MonoBehaviour
         state = BattleState.PLAYERTURN;
         CloseAllSubPanels();
         actionPanel.SetActive(true);
+        SetUIFocus(firstMenuButton);
     }
     
     // --- FUNGSI BARU: Menyiapkan Mode Targeting ---
@@ -211,6 +279,8 @@ public class BattleManager : MonoBehaviour
         // Set kursor ke target pertama
         currentTargetIndex = 0;
         validTargets[currentTargetIndex].SetTargetIndicator(true);
+        // --- BARU: Panggil pengaman jeda di sini ---
+        StartCoroutine(EnableTargetingDelay());
     }
 
     // ==========================================
@@ -245,14 +315,15 @@ public class BattleManager : MonoBehaviour
     private void PopulateSkillList()
     {
         foreach (Transform child in skillListContainer) Destroy(child.gameObject);
+        bool isFirstButton = true; // --- BARU ---
 
         // Hanya tampilkan skill milik karakter yang sedang jalan!
         for (int i = 0; i < currentActingUnit.maxMP; i++) // Trick agar rapi
         {
-            if (i >= playerTeamData[currentPlayerIndex].skills.Count) break;
-
+            if (i >= currentActingUnit.unitData.skills.Count) break;
+        
             int index = i; 
-            SkillAction skill = playerTeamData[currentPlayerIndex].skills[i];
+            SkillAction skill = currentActingUnit.unitData.skills[i];
 
             GameObject newBtnObj = Instantiate(skillItemPrefab, skillListContainer);
             TextMeshProUGUI btnText = newBtnObj.GetComponentInChildren<TextMeshProUGUI>();
@@ -260,12 +331,19 @@ public class BattleManager : MonoBehaviour
 
             Button btn = newBtnObj.GetComponent<Button>();
             btn.onClick.AddListener(() => ExecuteSkillButton(index));
+
+            // --- BARU: Fokus ke tombol skill teratas ---
+            if (isFirstButton)
+            {
+                SetUIFocus(newBtnObj);
+                isFirstButton = false;
+            }
         }
     }
 
     public void ExecuteSkillButton(int skillIndex)
     {
-        SkillAction chosenSkill = playerTeamData[currentPlayerIndex].skills[skillIndex];
+        SkillAction chosenSkill = currentActingUnit.unitData.skills[skillIndex];
         if (currentActingUnit.currentMP >= chosenSkill.mpCost)
         {
             pendingSkillIndex = skillIndex;
@@ -292,7 +370,7 @@ public class BattleManager : MonoBehaviour
     private void PopulateItemList()
     {
         foreach (Transform child in itemListContainer) Destroy(child.gameObject);
-
+        bool isFirstButton = true; // --- BARU ---
         for (int i = 0; i < battleItems.Count; i++)
         {
             int index = i;
@@ -312,6 +390,12 @@ public class BattleManager : MonoBehaviour
 
                 Button btn = newBtnObj.GetComponent<Button>();
                 btn.onClick.AddListener(() => ExecuteItemButton(index));
+
+                if (isFirstButton)
+                {
+                    SetUIFocus(newBtnObj);
+                    isFirstButton = false;
+                }
             }
         }
     }
@@ -341,7 +425,7 @@ public class BattleManager : MonoBehaviour
         }
         else if (pendingAction == ActionType.SKILL)
         {
-            SkillAction skill = playerTeamData[currentPlayerIndex].skills[pendingSkillIndex];
+            SkillAction skill = currentActingUnit.unitData.skills[pendingSkillIndex];
             StartCoroutine(PlayerUseSkill(skill, selectedUnit));
         }
         else if (pendingAction == ActionType.ITEM)
@@ -368,7 +452,7 @@ public class BattleManager : MonoBehaviour
     private IEnumerator PlayerAttack(Unit targetUnit)
     {
         bool isEnemyDead = false;
-        UnitData actingData = playerTeamData[currentPlayerIndex];
+        UnitData actingData = currentActingUnit.unitData;
 
         if (actingData.basicAttackType == SkillType.MELEE)
         {
@@ -483,6 +567,7 @@ public class BattleManager : MonoBehaviour
         // Munculkan menu lagi (Free action item)
         state = BattleState.PLAYERTURN;
         actionPanel.SetActive(true);
+        SetUIFocus(firstMenuButton);
     }
 
 
@@ -545,7 +630,7 @@ public class BattleManager : MonoBehaviour
 
             bool useSkill = false;
             SkillAction chosenSkill = null;
-            UnitData eData = enemyTeamData[i];
+            UnitData eData = eUnit.unitData;
 
             if (eData.skills.Count > 0 && Random.Range(0, 100) < 50)
             {
@@ -659,8 +744,37 @@ public class BattleManager : MonoBehaviour
 
     private void EndBattle()
     {
-        if (state == BattleState.WON) Debug.Log("Kamu Menang! Pertarungan Selesai.");
-        else if (state == BattleState.LOST) Debug.Log("Kamu Kalah... Game Over.");
+        // Matikan semua UI pertarungan agar bersih
+        actionPanel.SetActive(false);
+        CloseAllSubPanels();
+
+        if (state == BattleState.WON)
+        {
+            Debug.Log("Kamu Menang! Pertarungan Selesai.");
+            if (winPanel != null) winPanel.SetActive(true);
+        }
+        else if (state == BattleState.LOST)
+        {
+            Debug.Log("Kamu Kalah... Game Over.");
+            if (losePanel != null) losePanel.SetActive(true);
+        }
+    }
+    public void RestartBattle()
+    {
+        // Memuat ulang scene yang sedang aktif saat ini
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+    public void NextScene()
+    {
+        // Pindah ke scene berikutnya sesuai nama yang diisi di Inspector
+        if (!string.IsNullOrEmpty(nextSceneName))
+        {
+            SceneManager.LoadScene(nextSceneName);
+        }
+        else
+        {
+            Debug.LogWarning("Nama Next Scene belum diisi di BattleManager!");
+        }
     }
 
     private IEnumerator MoveUnit(Transform unitTransform, Vector3 targetPos)
