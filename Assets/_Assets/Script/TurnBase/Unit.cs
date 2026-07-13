@@ -96,6 +96,8 @@ public class Unit : MonoBehaviour
         {
             animator.SetTrigger("TakeHit");
         }
+        // --- SFX Terkena Serangan ---
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX("Hit");
 
         if (damageTextPrefab != null)
         {
@@ -257,6 +259,8 @@ public class Unit : MonoBehaviour
 
         if (animator != null) animator.SetTrigger("Die"); // Memanggil animasi mati
 
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX("Die");
+        
         // Matikan semua indikator agar bersih
         SetTargetIndicator(false);
         SetTurnIndicator(false);

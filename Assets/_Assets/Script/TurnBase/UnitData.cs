@@ -17,6 +17,8 @@ public class SkillAction
     public GameObject skillEffectPrefab; // Untuk peluru bola api atau efek ledakan
     public GameObject skillImpactPrefab;
     public int effectDuration; // Berapa turn efek ini bertahan (untuk DoT)
+    [Header("Pengaturan Audio")]
+    public string sfxId;
 }
 
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "TurnBasedRPG/Unit Data")]
@@ -35,6 +37,8 @@ public class UnitData : ScriptableObject
     public SkillType basicAttackType;
     public GameObject basicProjectilePrefab; // --- BARU: Peluru untuk Basic Attack ---
     public GameObject basicImpactPrefab;
+    // --- BARU: Suara untuk Basic Attack ---
+    public string basicAttackSfxId;
 
     [Header("Daftar Skill")]
     // Ini akan memunculkan array di Inspector di mana kamu bisa menambah 2, 3, atau 10 skill sekaligus

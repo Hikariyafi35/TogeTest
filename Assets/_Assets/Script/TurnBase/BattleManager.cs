@@ -202,7 +202,8 @@ private void HandleTargetSelection()
 
     // --- FUNGSI BARU: Membatalkan pilihan target (Kembali ke menu) ---
     private void CancelTargetingMode()
-    {
+    {   
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX("UI_Cancel");
         isTargetingInputActive = false; // --- BARU: Matikan pengaman ---
         Debug.Log("Dibatalkan! Kembali ke menu utama.");
         
@@ -414,6 +415,7 @@ private void HandleTargetSelection()
 // --- FUNGSI BARU: Eksekusi Target saat Spasi/Enter ditekan ---
     private void ConfirmTarget()
     {
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX("UI_Confirm");
         Unit selectedUnit = validTargets[currentTargetIndex];
         selectedUnit.SetTargetIndicator(false); // Matikan bayangan
         
@@ -444,6 +446,7 @@ private void HandleTargetSelection()
     private IEnumerator PlayerDefend()
     {
         Debug.Log(currentActingUnit.unitName + " mengambil posisi bertahan!");
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX("Defend");
         currentActingUnit.SetDefending(true);
         yield return new WaitForSeconds(0.5f); 
         NextTurnProcessor(); // Lanjut ke orang berikutnya
@@ -453,6 +456,12 @@ private void HandleTargetSelection()
     {
         bool isEnemyDead = false;
         UnitData actingData = currentActingUnit.unitData;
+
+        // --- BARU: SFX Basic Attack Player ---
+        if (!string.IsNullOrEmpty(actingData.basicAttackSfxId) && AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFX(actingData.basicAttackSfxId);
+        }
 
         if (actingData.basicAttackType == SkillType.MELEE)
         {
@@ -558,7 +567,10 @@ private void HandleTargetSelection()
     private IEnumerator PlayerUseItem(ItemData item, Unit targetUnit)
     {
         hasUsedItemThisTurn = true;
-
+        if (!string.IsNullOrEmpty(item.useItemSfxId) && AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFX(item.useItemSfxId);
+        }
         if (item.hpHealAmount > 0) targetUnit.HealHP(item.hpHealAmount);
         if (item.mpHealAmount > 0) targetUnit.HealMP(item.mpHealAmount);
 
@@ -691,6 +703,10 @@ private void HandleTargetSelection()
             }
             else
             {
+                if (!string.IsNullOrEmpty(eData.basicAttackSfxId) && AudioManager.Instance != null)
+                {
+                    AudioManager.Instance.PlaySFX(eData.basicAttackSfxId);
+                }
                 if (eData.basicAttackType == SkillType.MELEE)
                 {
                     Vector3 attackPos = pTarget.transform.position + new Vector3(1.5f, 0, 0);
